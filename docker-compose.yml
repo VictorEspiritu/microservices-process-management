@@ -1,0 +1,10 @@
+version: '3'
+
+services:
+    process_manager:
+        image: matthiasnoback/php_workshop_tools_base
+        volumes:
+            - ./:/opt
+        environment:
+            DB_PATH: /opt/var/db
+        command: php run.php
