@@ -6,12 +6,13 @@ namespace OrdersAndRegistrations\Application;
 use OrdersAndRegistrations\Domain\Model\Order\ConferenceId;
 use OrdersAndRegistrations\Domain\Model\Order\OrderId;
 
-final class OrderState
+final class OrderProcessState
 {
-    const NOT_STARTED = 'NOT_STARTED';
     const AWAITING_RESERVATION_CONFIRMATION = 'AWAITING_RESERVATION_CONFIRMATION';
     const AWAITING_PAYMENT = 'AWAITING_PAYMENT';
+    const REJECTED = 'REJECTED';
     const COMPLETED = 'COMPLETED';
+    const EXPIRED = 'EXPIRED';
 
     /**
      * @var OrderId
@@ -33,9 +34,9 @@ final class OrderState
         return (string)$this->orderId;
     }
 
-    public static function awaitReservationConfirmation(ConferenceId $conferenceId, OrderId $orderId)
+    public static function awaitReservationConfirmation(ConferenceId $conferenceId, OrderId $orderId): OrderProcessState
     {
-        $orderState = new OrderState();
+        $orderState = new OrderProcessState();
 
         $orderState->conferenceId = $conferenceId;
         $orderState->orderId = $orderId;
@@ -46,30 +47,41 @@ final class OrderState
 
     public function awaitPayment(): void
     {
+        if ($this->state !== self::AWAITING_RESERVATION_CONFIRMATION) {
+            throw new InvalidOperation();
+        }
+
         $this->state = self::AWAITING_PAYMENT;
     }
 
     public function complete(): void
     {
+        if ($this->state !== self::AWAITING_PAYMENT) {
+            throw new InvalidOperation();
+        }
+
         $this->state = self::COMPLETED;
     }
 
-    public function isCompleted(): bool
+    public function reject(): void
     {
-        return $this->state === self::COMPLETED;
+        if ($this->state !== self::AWAITING_RESERVATION_CONFIRMATION) {
+            throw new InvalidOperation();
+        }
+
+        $this->state = self::REJECTED;
     }
 
-    public function isAwaitingPayment()
+    public function expire(): void
     {
-        return $this->state === self::AWAITING_PAYMENT;
+        if ($this->state !== self::AWAITING_PAYMENT) {
+            throw new InvalidOperation();
+        }
+
+        $this->state = self::EXPIRED;
     }
 
-    public function isAwaitingReservationConfirmation()
-    {
-        return $this->state = self::AWAITING_RESERVATION_CONFIRMATION;
-    }
-
-    public function conferenceId()
+    public function conferenceId(): ConferenceId
     {
         return $this->conferenceId;
     }

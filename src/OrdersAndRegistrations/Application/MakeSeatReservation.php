@@ -18,5 +18,5 @@ final class MakeSeatReservation
     /**
      * @var int
      */
-    public $quantity;
+    public $numberOfSeats;
 }

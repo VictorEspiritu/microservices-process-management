@@ -22,6 +22,7 @@ use OrdersAndRegistrations\Application\PlaceOrder;
 use OrdersAndRegistrations\Application\RejectOrder;
 use OrdersAndRegistrations\Domain\Model\Order\ConferenceId;
 use OrdersAndRegistrations\Domain\Model\Order\Order;
+use OrdersAndRegistrations\Domain\Model\Order\OrderExpired;
 use OrdersAndRegistrations\Domain\Model\Order\OrderId;
 use OrdersAndRegistrations\Domain\Model\Order\OrderPlaced;
 use OrdersAndRegistrations\Domain\Model\SeatsAvailability\ReservationAccepted;
@@ -73,12 +74,12 @@ final class Application
         $this->orderRepository()->save($order);
     }
 
-    public function makeReservation(MakeSeatReservation $command): void
+    public function makeSeatReservation(MakeSeatReservation $command): void
     {
         /** @var SeatsAvailability $seatsAvailability */
         $seatsAvailability = $this->seatsAvailabilityRepository()->getById($command->conferenceId);
 
-        $seatsAvailability->makeReservation(ReservationId::fromString($command->reservationId), $command->quantity);
+        $seatsAvailability->makeReservation(ReservationId::fromString($command->reservationId), $command->numberOfSeats);
 
         $this->seatsAvailabilityRepository()->save($seatsAvailability);
     }
@@ -147,6 +148,10 @@ final class Application
             $eventDispatcher->registerSubscriber(
                 PaymentReceived::class,
                 [$this->orderProcessManager(), 'whenPaymentReceived']
+            );
+            $eventDispatcher->registerSubscriber(
+                OrderExpired::class,
+                [$this->orderProcessManager(), 'whenOrderExpired']
             );
             $eventDispatcher->registerSubscriber(
                 ReservationCommitted::class,
