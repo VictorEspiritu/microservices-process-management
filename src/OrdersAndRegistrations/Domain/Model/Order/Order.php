@@ -13,7 +13,6 @@ final class Order implements EventSourcedAggregate
     private const NEW = 'new';
     private const BOOKED = 'booked';
     private const REJECTED = 'rejected';
-    private const EXPIRED = 'expired';
 
     /**
      * @var OrderId
@@ -44,6 +43,14 @@ final class Order implements EventSourcedAggregate
         return $order;
     }
 
+    private function whenOrderPlaced(OrderPlaced $event): void
+    {
+        $this->id = $event->orderId();
+        $this->conferenceId = $event->conferenceId();
+        $this->numberOfTickets = $event->numberOfTickets();
+        $this->state = self::NEW;
+    }
+
     public function markAsBooked(): void
     {
         if ($this->state !== self::NEW) {
@@ -60,7 +67,7 @@ final class Order implements EventSourcedAggregate
 
     public function reject(): void
     {
-        if (!in_array($this->state, [self::NEW, self::BOOKED, self::EXPIRED], true)) {
+        if (!in_array($this->state, [self::NEW, self::BOOKED], true)) {
             throw new \LogicException();
         }
 
@@ -70,28 +77,6 @@ final class Order implements EventSourcedAggregate
     private function whenOrderRejected(OrderRejected $event): void
     {
         $this->state = self::REJECTED;
-    }
-
-    public function expire(): void
-    {
-        if (!in_array($this->state, [self::NEW, self::BOOKED], true)) {
-            throw new \LogicException();
-        }
-
-        $this->recordThat(new OrderExpired($this->id));
-    }
-
-    private function whenOrderExpired(OrderExpired $event): void
-    {
-        $this->state = self::EXPIRED;
-    }
-
-    private function whenOrderPlaced(OrderPlaced $event): void
-    {
-        $this->id = $event->orderId();
-        $this->conferenceId = $event->conferenceId();
-        $this->numberOfTickets = $event->numberOfTickets();
-        $this->state = self::NEW;
     }
 
     public function id(): string

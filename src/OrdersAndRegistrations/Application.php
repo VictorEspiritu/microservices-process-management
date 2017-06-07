@@ -63,12 +63,13 @@ final class Application
 
     public function expireOrder(ExpireOrder $command): void
     {
-        /** @var Order $order */
-        $order = $this->orderRepository()->getById($command->orderId);
+        /*
+         * OrderExpired is not a domain event originating from the Order aggregate.
+         * Instead, it is caused by the passing of time.
+         */
+        $orderExpired = new OrderExpired(OrderId::fromString($command->orderId));
 
-        $order->expire();
-
-        $this->orderRepository()->save($order);
+        $this->eventDispatcher()->dispatch($orderExpired);
     }
 
     public function markAsBooked(MarkAsBooked $command): void
@@ -137,22 +138,22 @@ final class Application
                     stdout(make_yellow(sprintf('Order placed (%s)', (string)$event->orderId())));
                 }
                 if ($event instanceof OrderRejected) {
-                    stdout(make_red(line('Order rejected (', (string)$event->orderId(), ')')));
+                    stdout(make_red(sprintf('Order rejected (%s)', (string)$event->orderId())));
                 }
                 if ($event instanceof ReservationAccepted) {
-                    stdout(make_yellow(line('Reservation accepted (', (string)$event->reservationId(), ')')));
+                    stdout(make_yellow(sprintf('Reservation accepted (%s)', (string)$event->reservationId())));
                 }
                 if ($event instanceof ReservationCancelled) {
-                    stdout(make_red(line('Reservation cancelled (', (string)$event->reservationId(), ')')));
+                    stdout(make_red(sprintf('Reservation cancelled (%s)', (string)$event->reservationId())));
                 }
                 if ($event instanceof ReservationCommitted) {
-                    stdout(make_green(line('Reservation committed (', (string)$event->reservationId(), ')')));
+                    stdout(make_green(sprintf('Reservation committed (%s)', (string)$event->reservationId())));
                 }
                 if ($event instanceof ReservationRejected) {
-                    stdout(make_red(line('Reservation rejected (', (string)$event->reservationId(), ')')));
+                    stdout(make_red(sprintf('Reservation rejected (%s)', (string)$event->reservationId())));
                 }
                 if ($event instanceof PaymentReceived) {
-                    stdout(make_yellow(line('Payment received (', (string)$event->orderId(), ')')));
+                    stdout(make_yellow(sprintf('Payment received (%s)', (string)$event->orderId())));
                 }
             });
 
