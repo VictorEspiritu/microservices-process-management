@@ -5,27 +5,34 @@ namespace OrdersAndRegistrations;
 
 use function Common\CommandLine\line;
 use function Common\CommandLine\make_green;
+use function Common\CommandLine\make_red;
+use function Common\CommandLine\make_yellow;
 use function Common\CommandLine\stdout;
 use Common\EventDispatcher\EventDispatcher;
 use Common\EventSourcing\Aggregate\Repository\EventSourcedAggregateRepository;
 use Common\EventSourcing\EventStore\EventStore;
 use Common\EventSourcing\EventStore\Storage\DatabaseStorageFacility;
 use NaiveSerializer\JsonSerializer;
+use OrdersAndRegistrations\Application\BadRequest;
+use OrdersAndRegistrations\Application\CancelSeatReservation;
 use OrdersAndRegistrations\Application\CommitSeatReservation;
 use OrdersAndRegistrations\Application\ConferenceManagement\ConferenceCreated;
 use OrdersAndRegistrations\Application\ExpireOrder;
 use OrdersAndRegistrations\Application\MakeSeatReservation;
 use OrdersAndRegistrations\Application\MarkAsBooked;
 use OrdersAndRegistrations\Application\OrderProcessManager;
-use OrdersAndRegistrations\Application\PaymentReceived;
+use OrdersAndRegistrations\Application\Payment\PaymentReceived;
 use OrdersAndRegistrations\Application\PlaceOrder;
 use OrdersAndRegistrations\Application\RejectOrder;
 use OrdersAndRegistrations\Domain\Model\Order\ConferenceId;
+use OrdersAndRegistrations\Domain\Model\Order\MarkedAsBooked;
 use OrdersAndRegistrations\Domain\Model\Order\Order;
 use OrdersAndRegistrations\Domain\Model\Order\OrderExpired;
 use OrdersAndRegistrations\Domain\Model\Order\OrderId;
 use OrdersAndRegistrations\Domain\Model\Order\OrderPlaced;
+use OrdersAndRegistrations\Domain\Model\Order\OrderRejected;
 use OrdersAndRegistrations\Domain\Model\SeatsAvailability\ReservationAccepted;
+use OrdersAndRegistrations\Domain\Model\SeatsAvailability\ReservationCancelled;
 use OrdersAndRegistrations\Domain\Model\SeatsAvailability\ReservationCommitted;
 use OrdersAndRegistrations\Domain\Model\SeatsAvailability\ReservationId;
 use OrdersAndRegistrations\Domain\Model\SeatsAvailability\ReservationRejected;
@@ -64,7 +71,7 @@ final class Application
         $this->orderRepository()->save($order);
     }
 
-    public function markAsBooked(MarkAsBooked $command)
+    public function markAsBooked(MarkAsBooked $command): void
     {
         /** @var Order $order */
         $order = $this->orderRepository()->getById($command->orderId);
@@ -84,12 +91,12 @@ final class Application
         $this->seatsAvailabilityRepository()->save($seatsAvailability);
     }
 
-    public function whenOrderPlaced(OrderPlaced $event)
+    public function whenOrderPlaced(): void
     {
         stdout(line('Now send out an email confirming the order...'));
     }
 
-    public function whenReservationCommitted(ReservationCommitted $event)
+    public function whenReservationCommitted(): void
     {
         stdout(line('We can now start creating and sending the invoice, etc...'));
     }
@@ -120,8 +127,33 @@ final class Application
             $eventDispatcher = new EventDispatcher();
 
             $eventDispatcher->subscribeToAllEvents(function ($event) {
-                stdout(line(make_green('Received an event')));
-                dump($event);
+                if ($event instanceof MarkedAsBooked) {
+                    stdout(make_yellow(sprintf('Order marked as booked (%s)', (string)$event->orderId())));
+                }
+                if ($event instanceof OrderExpired) {
+                    stdout(make_red(sprintf('Order expired (%s)', (string)$event->orderId())));
+                }
+                if ($event instanceof OrderPlaced) {
+                    stdout(make_yellow(sprintf('Order placed (%s)', (string)$event->orderId())));
+                }
+                if ($event instanceof OrderRejected) {
+                    stdout(make_red(line('Order rejected (', (string)$event->orderId(), ')')));
+                }
+                if ($event instanceof ReservationAccepted) {
+                    stdout(make_yellow(line('Reservation accepted (', (string)$event->reservationId(), ')')));
+                }
+                if ($event instanceof ReservationCancelled) {
+                    stdout(make_red(line('Reservation cancelled (', (string)$event->reservationId(), ')')));
+                }
+                if ($event instanceof ReservationCommitted) {
+                    stdout(make_green(line('Reservation committed (', (string)$event->reservationId(), ')')));
+                }
+                if ($event instanceof ReservationRejected) {
+                    stdout(make_red(line('Reservation rejected (', (string)$event->reservationId(), ')')));
+                }
+                if ($event instanceof PaymentReceived) {
+                    stdout(make_yellow(line('Payment received (', (string)$event->orderId(), ')')));
+                }
             });
 
             $eventDispatcher->registerSubscriber(
@@ -217,11 +249,16 @@ final class Application
         return $orderProcessManager;
     }
 
-    public function consumePaymentReceivedEvent(string $rawEventData): void
+    public function consumePaymentSucceededMessage(string $rawMessage): void
     {
-        $data = json_decode($rawEventData);
+        $data = json_decode($rawMessage);
+        if (!isset($data->correlationId)) {
+            throw new BadRequest('Expected JSON data to contain a "correlationId" field');
+        }
 
-        $this->eventDispatcher()->dispatch(new PaymentReceived(OrderId::fromString($data->orderId)));
+        $event = new PaymentReceived(OrderId::fromString($data->correlationId));
+
+        $this->eventDispatcher()->dispatch($event);
     }
 
     public function commitSeatReservation(CommitSeatReservation $command): void
@@ -230,6 +267,16 @@ final class Application
         $seatsAvailability = $this->seatsAvailabilityRepository()->getById($command->conferenceId);
 
         $seatsAvailability->commitReservation(ReservationId::fromString($command->reservationId));
+
+        $this->seatsAvailabilityRepository()->save($seatsAvailability);
+    }
+
+    public function cancelSeatReservation(CancelSeatReservation $command): void
+    {
+        /** @var SeatsAvailability $seatsAvailability */
+        $seatsAvailability = $this->seatsAvailabilityRepository()->getById($command->conferenceId);
+
+        $seatsAvailability->cancelReservation(ReservationId::fromString($command->reservationId));
 
         $this->seatsAvailabilityRepository()->save($seatsAvailability);
     }

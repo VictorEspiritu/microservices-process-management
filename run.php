@@ -38,11 +38,13 @@ $answer = fgets(STDIN);
 if (substr(trim($answer), 0, 1) === 'y') {
     $externalPaymentReceivedEventData = <<<EOD
 {
-    "orderId": "$orderId"
+    "paidAmount": 395.50,
+    "merchantId": "foo123",
+    "correlationId": "$orderId"
 }
 EOD;
 
-    $application->consumePaymentReceivedEvent($externalPaymentReceivedEventData);
+    $application->consumePaymentSucceededMessage($externalPaymentReceivedEventData);
 } else {
     $command = new ExpireOrder();
     $command->orderId = $orderId;

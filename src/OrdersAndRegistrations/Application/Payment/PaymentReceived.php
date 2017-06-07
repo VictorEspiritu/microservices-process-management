@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-namespace OrdersAndRegistrations\Application;
+namespace OrdersAndRegistrations\Application\Payment;
 
 use OrdersAndRegistrations\Domain\Model\Order\OrderId;
 

@@ -60,7 +60,7 @@ final class Order implements EventSourcedAggregate
 
     public function reject(): void
     {
-        if (!in_array($this->state, [self::NEW, self::BOOKED])) {
+        if (!in_array($this->state, [self::NEW, self::BOOKED, self::EXPIRED], true)) {
             throw new \LogicException();
         }
 
@@ -74,7 +74,7 @@ final class Order implements EventSourcedAggregate
 
     public function expire(): void
     {
-        if (!in_array($this->state, [self::NEW, self::BOOKED])) {
+        if (!in_array($this->state, [self::NEW, self::BOOKED], true)) {
             throw new \LogicException();
         }
 

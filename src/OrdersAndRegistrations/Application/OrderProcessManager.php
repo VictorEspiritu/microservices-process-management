@@ -5,6 +5,7 @@ namespace OrdersAndRegistrations\Application;
 
 use Common\Persistence\Database;
 use OrdersAndRegistrations\Application;
+use OrdersAndRegistrations\Application\Payment\PaymentReceived;
 use OrdersAndRegistrations\Domain\Model\Order\OrderExpired;
 use OrdersAndRegistrations\Domain\Model\Order\OrderPlaced;
 use OrdersAndRegistrations\Domain\Model\SeatsAvailability\ReservationAccepted;
@@ -37,8 +38,8 @@ final class OrderProcessManager
          * Send command: MakeSeatReservation
          */
         $command = new MakeSeatReservation();
-        $command->conferenceId = (string)$event->conferenceId();
         $command->reservationId = (string)$event->orderId();
+        $command->conferenceId = (string)$event->conferenceId();
         $command->numberOfSeats = $event->numberOfTickets();
 
         $this->application->makeSeatReservation($command);
@@ -46,21 +47,22 @@ final class OrderProcessManager
 
     public function whenReservationAccepted(ReservationAccepted $event): void
     {
-        $orderProcessState = $this->loadState(
+        $state = $this->loadState(
             (string)$event->reservationId()
         );
 
         /*
          * Transition to state: AwaitingPayment
          */
-        $orderProcessState->awaitPayment();
-        Database::persist($orderProcessState);
+        $state->awaitPayment();
+        $this->saveState($state);
 
         /*
          * Send command: MarkAsBooked
          */
         $command = new MarkAsBooked();
         $command->orderId = (string)$event->reservationId();
+
         $this->application->markAsBooked($command);
 
         /*
@@ -86,6 +88,7 @@ final class OrderProcessManager
          */
         $command = new RejectOrder();
         $command->orderId = (string)$event->reservationId();
+
         $this->application->rejectOrder($command);
     }
 
@@ -117,8 +120,28 @@ final class OrderProcessManager
             (string)$event->orderId()
         );
 
+        /*
+         * Transition to state: Expired
+         */
         $state->expire();
         $this->saveState($state);
+
+        /*
+         * Send command: CancelSeatReservation
+         */
+        $command = new CancelSeatReservation();
+        $command->reservationId = (string)$event->orderId();
+        $command->conferenceId = (string)$state->conferenceId();
+
+        $this->application->cancelSeatReservation($command);
+
+        /*
+         * Send command: RejectOrder
+         */
+        $command = new RejectOrder();
+        $command->orderId = (string)$event->orderId();
+
+        $this->application->rejectOrder($command);
     }
 
     private function loadState(string $id): OrderProcessState
